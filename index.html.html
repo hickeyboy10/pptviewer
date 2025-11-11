@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Auto-Play Slideshow</title>
+  <title>Saved Slideshow</title>
   <style>
     body {
       margin: 0;
@@ -51,7 +51,7 @@
     let slides = [];
     let current = 0;
 
-    // Try to load saved presentation automatically
+    // Load saved slideshow automatically if it exists
     window.addEventListener("DOMContentLoaded", async () => {
       const saved = localStorage.getItem("presentationData");
       if (saved) {
@@ -61,7 +61,7 @@
       }
     });
 
-    // Handle upload (only first time)
+    // Handle first-time upload
     input.addEventListener("change", async () => {
       const files = Array.from(input.files);
       if (!files.length) return;
@@ -115,10 +115,17 @@
       showSlide((current + 1) % slides.length);
     }
 
+    // Tap or click anywhere to advance
     document.body.addEventListener("click", next);
+
+    // Keyboard navigation
     window.addEventListener("keydown", e => {
       if (e.key === "ArrowRight" || e.key === " ") next();
       if (e.key === "ArrowLeft") showSlide((current - 1 + slides.length) % slides.length);
     });
 
+    // Auto-advance when a video ends
     vid.addEventListener("ended", next);
+  </script>
+</body>
+</html>
