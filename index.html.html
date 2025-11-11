@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Auto-Saved Presentation</title>
+  <title>Auto-Play Slideshow</title>
   <style>
     body {
       margin: 0;
@@ -18,16 +18,15 @@
       cursor: pointer;
     }
     input { display: none; }
-    label, button {
+    label {
       background: #7c5cff;
       padding: 14px 28px;
       border-radius: 12px;
       cursor: pointer;
       font-weight: 600;
-      border: none;
-      margin: 6px;
+      transition: background 0.2s ease;
     }
-    label:hover, button:hover { background: #6249ff; }
+    label:hover { background: #6249ff; }
     img, video {
       max-width: 100%;
       max-height: 100%;
@@ -35,19 +34,10 @@
       border-radius: 12px;
       object-fit: contain;
     }
-    #controls {
-      position: absolute;
-      top: 20px;
-      display: flex;
-      gap: 10px;
-    }
   </style>
 </head>
 <body>
-  <div id="controls">
-    <label for="media">Upload</label>
-    <button id="clear" style="display:none;">Clear Saved</button>
-  </div>
+  <label for="media">Upload Images or Videos</label>
   <input type="file" id="media" accept="image/*,video/*" multiple />
   <img id="image" />
   <video id="video" playsinline preload="auto"></video>
@@ -55,98 +45,80 @@
   <script>
     const input = document.getElementById("media");
     const label = document.querySelector("label");
-    const clearBtn = document.getElementById("clear");
     const img = document.getElementById("image");
     const vid = document.getElementById("video");
 
-    let mediaData = []; // array of {type, dataURL}
+    let slides = [];
     let current = 0;
 
-    // On load: try to restore saved presentation
+    // Try to load saved presentation automatically
     window.addEventListener("DOMContentLoaded", async () => {
       const saved = localStorage.getItem("presentationData");
       if (saved) {
-        mediaData = JSON.parse(saved);
-        if (mediaData.length > 0) {
-          label.style.display = "none";
-          clearBtn.style.display = "block";
-          await preloadAll();
-          showSlide(0);
-          document.body.requestFullscreen?.();
-        }
+        slides = JSON.parse(saved);
+        await preloadSlides();
+        startSlideshow();
       }
     });
 
-    // When user uploads
+    // Handle upload (only first time)
     input.addEventListener("change", async () => {
       const files = Array.from(input.files);
       if (!files.length) return;
-      label.style.display = "none";
-      clearBtn.style.display = "block";
-      mediaData = await filesToBase64(files);
-      localStorage.setItem("presentationData", JSON.stringify(mediaData));
-      await preloadAll();
-      showSlide(0);
-      document.body.requestFullscreen?.();
+      slides = await filesToBase64(files);
+      localStorage.setItem("presentationData", JSON.stringify(slides));
+      await preloadSlides();
+      startSlideshow();
     });
-
-    clearBtn.onclick = () => {
-      localStorage.removeItem("presentationData");
-      location.reload();
-    };
 
     async function filesToBase64(files) {
       const result = [];
       for (const f of files) {
-        const base64 = await new Promise(resolve => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.readAsDataURL(f);
+        const base64 = await new Promise(res => {
+          const r = new FileReader();
+          r.onload = () => res(r.result);
+          r.readAsDataURL(f);
         });
-        result.push({ type: f.type.startsWith("video") ? "video" : "image", dataURL: base64 });
+        result.push({ type: f.type.startsWith("video") ? "video" : "image", data: base64 });
       }
       return result;
     }
 
-    async function preloadAll() {
-      // convert base64 to object URLs for playback
-      mediaData = mediaData.map(item => ({
-        ...item,
-        url: item.dataURL
-      }));
+    async function preloadSlides() {
+      slides = slides.map(s => ({ ...s, url: s.data }));
     }
 
-    function showSlide(index) {
-      if (index < 0 || index >= mediaData.length) return;
-      current = index;
-      const item = mediaData[current];
+    function startSlideshow() {
+      label.style.display = "none";
+      document.body.requestFullscreen?.();
+      showSlide(0);
+    }
 
+    function showSlide(i) {
+      if (i < 0 || i >= slides.length) return;
+      current = i;
+      const s = slides[i];
       img.style.display = "none";
       vid.style.display = "none";
       vid.pause();
-
-      if (item.type === "video") {
-        vid.src = item.url;
+      if (s.type === "video") {
+        vid.src = s.url;
         vid.style.display = "block";
         vid.play();
       } else {
-        img.src = item.url;
+        img.src = s.url;
         img.style.display = "block";
       }
     }
 
-    function nextSlide() {
-      showSlide((current + 1) % mediaData.length);
+    function next() {
+      showSlide((current + 1) % slides.length);
     }
 
-    document.body.addEventListener("click", nextSlide);
-
+    document.body.addEventListener("click", next);
     window.addEventListener("keydown", e => {
-      if (e.key === "ArrowRight" || e.key === " ") nextSlide();
-      if (e.key === "ArrowLeft") showSlide((current - 1 + mediaData.length) % mediaData.length);
+      if (e.key === "ArrowRight" || e.key === " ") next();
+      if (e.key === "ArrowLeft") showSlide((current - 1 + slides.length) % slides.length);
     });
 
-    vid.addEventListener("ended", nextSlide);
-  </script>
-</body>
-</html>
+    vid.addEventListener("ended", next);
