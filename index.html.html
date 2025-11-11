@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Saved Slideshow</title>
+  <title>Auto-Saved Presentation</title>
   <style>
     body {
       margin: 0;
@@ -24,6 +24,8 @@
       border-radius: 12px;
       cursor: pointer;
       font-weight: 600;
+      border: none;
+      margin: 6px;
       transition: background 0.2s ease;
     }
     label:hover { background: #6249ff; }
@@ -34,10 +36,18 @@
       border-radius: 12px;
       object-fit: contain;
     }
+    #controls {
+      position: absolute;
+      top: 20px;
+      display: flex;
+      gap: 10px;
+    }
   </style>
 </head>
 <body>
-  <label for="media">Upload Images or Videos</label>
+  <div id="controls">
+    <label for="media">Upload</label>
+  </div>
   <input type="file" id="media" accept="image/*,video/*" multiple />
   <img id="image" />
   <video id="video" playsinline preload="auto"></video>
@@ -48,84 +58,90 @@
     const img = document.getElementById("image");
     const vid = document.getElementById("video");
 
-    let slides = [];
+    let mediaData = []; // array of {type, dataURL}
     let current = 0;
 
-    // Load saved slideshow automatically if it exists
+    // On load: try to restore saved presentation
     window.addEventListener("DOMContentLoaded", async () => {
       const saved = localStorage.getItem("presentationData");
       if (saved) {
-        slides = JSON.parse(saved);
-        await preloadSlides();
-        startSlideshow();
+        mediaData = JSON.parse(saved);
+        if (mediaData.length > 0) {
+          label.style.display = "none";
+          await preloadAll();
+          showSlide(0);
+          document.body.requestFullscreen?.();
+        }
       }
     });
 
-    // Handle first-time upload
+    // When user uploads
     input.addEventListener("change", async () => {
       const files = Array.from(input.files);
       if (!files.length) return;
-      slides = await filesToBase64(files);
-      localStorage.setItem("presentationData", JSON.stringify(slides));
-      await preloadSlides();
-      startSlideshow();
+      label.style.display = "none";
+      mediaData = await filesToBase64(files);
+      localStorage.setItem("presentationData", JSON.stringify(mediaData));
+      await preloadAll();
+      showSlide(0);
+      document.body.requestFullscreen?.();
     });
 
     async function filesToBase64(files) {
       const result = [];
       for (const f of files) {
-        const base64 = await new Promise(res => {
-          const r = new FileReader();
-          r.onload = () => res(r.result);
-          r.readAsDataURL(f);
+        const base64 = await new Promise(resolve => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(f);
         });
-        result.push({ type: f.type.startsWith("video") ? "video" : "image", data: base64 });
+        result.push({ type: f.type.startsWith("video") ? "video" : "image", dataURL: base64 });
       }
       return result;
     }
 
-    async function preloadSlides() {
-      slides = slides.map(s => ({ ...s, url: s.data }));
+    async function preloadAll() {
+      // convert base64 to data URLs for playback
+      mediaData = mediaData.map(item => ({
+        ...item,
+        url: item.dataURL
+      }));
     }
 
-    function startSlideshow() {
-      label.style.display = "none";
-      document.body.requestFullscreen?.();
-      showSlide(0);
-    }
+    function showSlide(index) {
+      if (index < 0 || index >= mediaData.length) return;
+      current = index;
+      const item = mediaData[current];
 
-    function showSlide(i) {
-      if (i < 0 || i >= slides.length) return;
-      current = i;
-      const s = slides[i];
       img.style.display = "none";
       vid.style.display = "none";
       vid.pause();
-      if (s.type === "video") {
-        vid.src = s.url;
+
+      if (item.type === "video") {
+        vid.src = item.url;
         vid.style.display = "block";
         vid.play();
       } else {
-        img.src = s.url;
+        img.src = item.url;
         img.style.display = "block";
       }
     }
 
-    function next() {
-      showSlide((current + 1) % slides.length);
+    function nextSlide() {
+      showSlide((current + 1) % mediaData.length);
     }
 
-    // Tap or click anywhere to advance
-    document.body.addEventListener("click", next);
+    // Tap/click anywhere to advance
+    document.body.addEventListener("click", nextSlide);
 
     // Keyboard navigation
     window.addEventListener("keydown", e => {
-      if (e.key === "ArrowRight" || e.key === " ") next();
-      if (e.key === "ArrowLeft") showSlide((current - 1 + slides.length) % slides.length);
+      if (e.key === "ArrowRight" || e.key === " ") nextSlide();
+      if (e.key === "ArrowLeft") showSlide((current - 1 + mediaData.length) % mediaData.length);
     });
 
     // Auto-advance when a video ends
-    vid.addEventListener("ended", next);
+    vid.addEventListener("ended", nextSlide);
   </script>
 </body>
 </html>
